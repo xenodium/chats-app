@@ -30,7 +30,9 @@
 
 ;;; Code:
 
-(require 'cl-lib)
+(eval-when-compile
+  (require 'cl-lib))
+(require 'map)
 
 (declare-function chats-app--log "chats-app")
 (declare-function chats-app--add-action-to-text "chats-app")
@@ -155,54 +157,76 @@ Returns string like \"Hello\" or \"[image]\"."
     ;; (message "[unknown]\n\n%s" p-message)
     "[unknown]")))
 
-(cl-defun chats-app-chat--parse-message (p-message &key chat-jid contact-name contacts)
+(cl-defun chats-app-chat--parse-sender-name (p-data p-sender-jid &key contacts contact-name)
+  "Parse sender name from P-DATA and P-SENDER-JID.
+CONTACTS is the internal contacts alist for name resolution.
+CONTACT-NAME is an optional fallback name."
+  (cond
+   ((map-nested-elt p-data '(Info IsFromMe))
+    "Me")
+   ((and p-sender-jid contacts
+         (assoc (intern p-sender-jid) contacts))
+    (let* ((contact (assoc (intern p-sender-jid) contacts))
+           (full-name (map-elt (cdr contact) :full-name))
+           (push-name (map-elt (cdr contact) :push-name)))
+      (or (and full-name (not (string-empty-p full-name)) full-name)
+          (and push-name (not (string-empty-p push-name)) push-name))))
+   (t
+    (let ((push-name (map-nested-elt p-data '(Info PushName))))
+      (or (and push-name (not (string-empty-p push-name)) push-name)
+          (and contact-name (not (string-empty-p contact-name)) contact-name)
+          (and p-sender-jid
+               (if (string-match "\\([^@]+\\)@" p-sender-jid)
+                   (match-string 1 p-sender-jid)
+                 p-sender-jid))
+          "Unknown")))))
+
+(cl-defun chats-app-chat--parse-message (p-message &key chat-jid contact-name contacts reactions)
   "Parse a protocol message (from database) into internal display format.
-Returns alist with :sender-name, :timestamp, :content.
-CONTACTS should be internal contacts alist for sender name resolution."
+Returns alist with :sender-name, :timestamp, :content, :message-id, and :reactions.
+Returns nil for reaction messages (they're handled separately).
+CONTACTS should be internal contacts alist for sender name resolution.
+REACTIONS is a hash table of message-id -> list of reactions."
   (let* ((data-json (map-elt p-message 'data_json))
-         (timestamp (map-elt p-message 'timestamp)))
+         (timestamp (map-elt p-message 'timestamp))
+         (msg-id (map-elt p-message 'message_id)))
     (if (and data-json (not (string-empty-p data-json)))
         ;; Parse from data_json (preferred - has full info)
-        (let* ((data (json-parse-string data-json :object-type 'alist
-                                        :null-object nil
-                                        :false-object nil))
-               (p-info (map-elt data 'Info))
-               (p-msg (map-elt data 'Message))
-               (is-from-me (map-elt p-info 'IsFromMe))
-               (sender-jid (map-elt p-info 'Sender))
-               (sender-name (if is-from-me
-                                "Me"
-                              (or
-                               ;; Try to look up sender in contacts
-                               (and sender-jid contacts
-                                    (when-let ((contact (assoc (intern sender-jid) contacts)))
-                                      (let ((full-name (map-elt (cdr contact) :full-name))
-                                            (push-name (map-elt (cdr contact) :push-name)))
-                                        (or (and full-name (not (string-empty-p full-name)) full-name)
-                                            (and push-name (not (string-empty-p push-name)) push-name)))))
-                               ;; Use PushName from message info
-                               (let ((push-name (map-elt p-info 'PushName)))
-                                 (and push-name (not (string-empty-p push-name)) push-name))
-                               ;; Use contact-name parameter if available
-                               (and contact-name (not (string-empty-p contact-name)) contact-name)
-                               ;; Extract phone number from sender JID as fallback
-                               (and sender-jid
-                                    (if (string-match "\\([^@]+\\)@" sender-jid)
-                                        (match-string 1 sender-jid)
-                                      sender-jid))
-                               ;; Ultimate fallback
-                               "Unknown")))
-               (content (chats-app-chat--parse-content p-msg)))
-          `((:sender-name . ,sender-name)
-            (:timestamp . ,(map-elt p-info 'Timestamp))
-            (:content . ,content)))
+        (let ((p-data (json-parse-string data-json :object-type 'alist
+                                         :null-object nil
+                                         :false-object nil)))
+          ;; Skip reaction messages - they're already in reactions.
+          (unless (map-nested-elt p-data '(Message reactionMessage))
+            (let* ((p-sender-jid (map-nested-elt p-data '(Info Sender)))
+                   (p-sender-name (chats-app-chat--parse-sender-name p-data p-sender-jid
+                                                                      :contacts contacts
+                                                                      :contact-name contact-name)))
+              (if (and msg-id reactions (map-elt reactions msg-id))
+                  `((:message-id . ,msg-id)
+                    (:sender-name . ,p-sender-name)
+                    (:timestamp . ,(map-nested-elt p-data '(Info Timestamp)))
+                    (:content . ,(chats-app-chat--parse-content (map-elt p-data 'Message)))
+                    (:reactions . ,(reverse (map-elt reactions msg-id))))
+                `((:message-id . ,msg-id)
+                  (:sender-name . ,p-sender-name)
+                  (:timestamp . ,(map-nested-elt p-data '(Info Timestamp)))
+                  (:content . ,(chats-app-chat--parse-content (map-elt p-data 'Message))))))))
       ;; Fallback: parse from basic fields (outgoing messages without data_json)
       (let* ((is-from-me (string= (map-elt p-message 'sender_jid) "me"))
              (sender-name (if is-from-me "Me" (or contact-name chat-jid)))
-             (content (or (map-elt p-message 'text_content) "[message]")))
-        `((:sender-name . ,sender-name)
-          (:timestamp . ,timestamp)
-          (:content . ,content))))))
+             (content (or (map-elt p-message 'text_content) "[message]"))
+             (reactions (when (and msg-id reactions)
+                          (map-elt reactions msg-id))))
+        (if reactions
+            `((:message-id . ,msg-id)
+              (:sender-name . ,sender-name)
+              (:timestamp . ,timestamp)
+              (:content . ,content)
+              (:reactions . ,(reverse reactions)))
+          `((:message-id . ,msg-id)
+            (:sender-name . ,sender-name)
+            (:timestamp . ,timestamp)
+            (:content . ,content)))))))
 
 (cl-defun chats-app-chat--parse-notification (&key p-message p-info contact-name chat-jid)
   "Parse protocol notification MESSAGE and INFO into internal message format.
@@ -223,21 +247,45 @@ Returns alist with :sender-name, :timestamp, :content."
       (:timestamp . ,timestamp)
       (:content . ,content))))
 
+(cl-defun chats-app-chat--parse-reactions (p-messages &key contacts)
+  "Parse reactions from P-MESSAGES and return a hash map of message-id -> reactions.
+Each reaction is an alist with :emoji and :sender keys.
+CONTACTS is used to resolve sender names."
+  (let ((reactions (make-hash-table :test 'equal)))
+    (dolist (p-msg (append p-messages nil))
+      (when-let* ((data-json (map-elt p-msg 'data_json))
+                  ((not (string-empty-p data-json)))
+                  (p-data (json-parse-string data-json :object-type 'alist
+                                             :null-object nil
+                                             :false-object nil))
+                  ((map-nested-elt p-data '(Message reactionMessage)))
+                  (p-target-id (map-nested-elt p-data '(Message reactionMessage key ID)))
+                  (p-sender-jid (map-nested-elt p-data '(Info Sender)))
+                  (p-sender-name (chats-app-chat--parse-sender-name p-data p-sender-jid
+                                                                     :contacts contacts)))
+        (map-put! reactions p-target-id
+                  (cons `((:emoji . ,(map-nested-elt p-data '(Message reactionMessage text)))
+                          (:sender . ,p-sender-name))
+                        (map-elt reactions p-target-id)))))
+    reactions))
+
 (cl-defun chats-app-chat--parse-messages (p-messages &key chat-jid contact-name contacts)
   "Parse array of protocol messages into list of internal display messages.
-Returns list of message alists, sorted by timestamp (oldest first)."
-  (let* ((parsed (delq nil
+Returns list of message alists, sorted by timestamp (oldest first).
+Messages with reactions will have a :reactions field."
+  (let* ((reactions (chats-app-chat--parse-reactions p-messages :contacts contacts))
+         (parsed (delq nil
                        (mapcar (lambda (p-msg)
                                  (chats-app-chat--parse-message p-msg
                                                                 :chat-jid chat-jid
                                                                 :contact-name contact-name
-                                                                :contacts contacts))
-                               (append p-messages nil))))
-         (sorted (sort parsed
-                       (lambda (a b)
-                         (string< (map-elt a :timestamp)
-                                  (map-elt b :timestamp))))))
-    sorted))
+                                                                :contacts contacts
+                                                                :reactions reactions))
+                               (append p-messages nil)))))
+    (sort parsed
+          (lambda (a b)
+            (string< (map-elt a :timestamp)
+                     (map-elt b :timestamp))))))
 
 (defun chats-app-chat--calculate-max-sender-width (messages)
   "Calculate maximum sender name width from internal MESSAGES for alignment."
@@ -463,12 +511,13 @@ MESSAGES is a list of already-parsed internal message alists."
     (chats-app-chat--setup-prompt)
     (goto-char (point-max))))
 
-(cl-defun chats-app-chat--render-message (&key sender-name timestamp content max-sender-width)
+(cl-defun chats-app-chat--render-message (&key sender-name timestamp content max-sender-width reactions)
   "Render a single internal message.
 SENDER-NAME is the display name of the sender.
 TIMESTAMP is the ISO8601 timestamp string.
 CONTENT is the display content (already parsed, may include text properties).
-MAX-SENDER-WIDTH is used for padding alignment."
+MAX-SENDER-WIDTH is used for padding alignment.
+REACTIONS is a list of reaction alists with :emoji and :sender keys."
   (let* ((col1-width max-sender-width)
          (is-from-me (string= sender-name "Me"))
          (sender (propertize sender-name
@@ -487,9 +536,30 @@ MAX-SENDER-WIDTH is used for padding alignment."
     ;; Mateo 15:32
     ;;       Hello
     ;;
+    ;; With reactions:
+    ;;
+    ;; Mateo 15:32
+    ;;       ❤️ (reaction)
+    ;;       George 05:54
+    ;;       Hello
+    ;;
     (concat sender-padding sender " " (or time "")
             "\n" (make-string col1-width ?\s) " "
-            (string-replace "\n" (concat "\n " (make-string col1-width ?\s)) content))))
+            (string-replace "\n" (concat "\n " (make-string col1-width ?\s)) content)
+            ;; Add reactions below the message
+            (when reactions
+              (concat "\n"
+                      (mapconcat
+                       (lambda (reaction)
+                         (let ((emoji (map-elt reaction :emoji))
+                               (reaction-sender (map-elt reaction :sender)))
+                           (concat (make-string col1-width ?\s) " "
+                                   emoji
+                                   " "
+                                   (propertize reaction-sender
+                                               'face 'font-lock-comment-face))))
+                       reactions
+                       "\n"))))))
 
 (defun chats-app-chat--render-messages (messages)
   "Render internal format MESSAGES to current buffer.
@@ -502,7 +572,8 @@ MESSAGES is a list of alists with :sender-name, :timestamp, :content."
               :sender-name (map-elt msg :sender-name)
               :timestamp (map-elt msg :timestamp)
               :content (map-elt msg :content)
-              :max-sender-width max-sender-width))
+              :max-sender-width max-sender-width
+              :reactions (map-elt msg :reactions)))
            messages)))
     (let ((start (point)))
       (insert (mapconcat #'identity message-lines "\n\n"))
@@ -541,7 +612,8 @@ Updates :messages list and :max-sender-width in chat state."
                  :sender-name (map-elt message :sender-name)
                  :timestamp (map-elt message :timestamp)
                  :content (map-elt message :content)
-                 :max-sender-width (map-elt chats-app-chat--chat :max-sender-width)))
+                 :max-sender-width (map-elt chats-app-chat--chat :max-sender-width)
+                 :reactions (map-elt message :reactions)))
         (insert "\n\n")
         (put-text-property start (point) 'read-only t))
       (chats-app-chat--setup-prompt)

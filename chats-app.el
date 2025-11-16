@@ -30,6 +30,8 @@
 ;;; Code:
 
 (require 'acp) ;; for json-rpc.
+(eval-when-compile
+  (require 'cl-lib))
 (require 'map)
 (require 'seq)
 (require 'chats-app-chat)
