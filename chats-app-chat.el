@@ -105,11 +105,44 @@ Returns string like \"Hello\" or \"[image]\"."
               (when-let ((caption (map-nested-elt p-message '(imageMessage caption))))
                 (concat "\n" caption)))))
    ((map-elt p-message 'videoMessage)
-    (or (map-nested-elt p-message '(videoMessage caption)) "[video]"))
+    (chats-app--log "Video message: %s" p-message)
+    (let* ((thumbnail (map-nested-elt p-message '(videoMessage JPEGThumbnail)))
+           (video-text (if thumbnail
+                           (propertize "[video]" 'display
+                                       (create-image (base64-decode-string thumbnail)
+                                                     'jpeg t
+                                                     :max-width 120 :max-height 120))
+                         "[video]")))
+      ;; Store metadata as text properties
+      (add-text-properties 0 (length video-text)
+                           `(video-url ,(map-nested-elt p-message '(videoMessage URL))
+                             video-direct-path ,(map-nested-elt p-message '(videoMessage directPath))
+                             video-media-key ,(map-nested-elt p-message '(videoMessage mediaKey))
+                             video-mimetype ,(map-nested-elt p-message '(videoMessage mimetype))
+                             video-file-enc-sha256 ,(map-nested-elt p-message '(videoMessage fileEncSHA256))
+                             video-file-sha256 ,(map-nested-elt p-message '(videoMessage fileSHA256))
+                             video-file-length ,(map-nested-elt p-message '(videoMessage fileLength))
+                             video-seconds ,(map-nested-elt p-message '(videoMessage seconds))
+                             video-width ,(map-nested-elt p-message '(videoMessage width))
+                             video-height ,(map-nested-elt p-message '(videoMessage height)))
+                           video-text)
+      ;; Add action to play video on RET
+      (setq video-text (chats-app--add-action-to-text
+                        video-text
+                        (lambda ()
+                          (interactive)
+                          (chats-app-chat-play-video-at-point))))
+      (concat video-text
+              (when-let ((caption (map-nested-elt p-message '(videoMessage caption))))
+                (concat "\n" caption)))))
    ((map-elt p-message 'documentMessage) "[document]")
    ((map-elt p-message 'audioMessage) "[audio]")
-   ((map-elt p-message 'stickerMessage) "[sticker]")
-   (t "[unknown]")))
+   ((map-elt p-message 'stickerMessage)
+    (message "[sticker]\n\n%s" p-message)
+    "[sticker]")
+   (t
+    (message "[unknown]\n\n%s" p-message)
+    "[unknown]")))
 
 (cl-defun chats-app-chat--parse-message (p-message &key chat-jid contact-name contacts)
   "Parse a protocol message (from database) into internal display format.
@@ -526,6 +559,101 @@ Displays messages in a two-column format: sender | message."
       (goto-char (point-max)))
 
     (switch-to-buffer chat-buffer)))
+
+(defun chats-app-chat-play-video-at-point ()
+  "Download and play the video at point using external player."
+  (interactive)
+  (unless (get-text-property (point) 'video-url)
+    (user-error "No video at point"))
+  (let* ((url (get-text-property (point) 'video-url))
+         (direct-path (get-text-property (point) 'video-direct-path))
+         (media-key (get-text-property (point) 'video-media-key))
+         (mimetype (get-text-property (point) 'video-mimetype))
+         (file-enc-sha256 (get-text-property (point) 'video-file-enc-sha256))
+         (file-sha256 (get-text-property (point) 'video-file-sha256))
+         (file-length (get-text-property (point) 'video-file-length))
+         ;; Check if file already exists
+         (file-id (if file-sha256
+                      (replace-regexp-in-string "[^a-zA-Z0-9]" "" file-sha256)
+                    (format "%d" (random 1000000))))
+         (extension (cond
+                     ((string-match "video/mp4" mimetype) ".mp4")
+                     ((string-match "video/quicktime" mimetype) ".mov")
+                     ((string-match "video/x-matroska" mimetype) ".mkv")
+                     ((string-match "video/webm" mimetype) ".webm")
+                     (t ".mp4")))
+         (temp-file (expand-file-name (concat "chatsapp-video-" file-id extension)
+                                      temporary-file-directory)))
+    (if (file-exists-p temp-file)
+        ;; File already downloaded, just open it
+        (chats-app-chat--open-video-externally temp-file)
+      ;; Download the video
+      (message "Downloading video...")
+      (with-current-buffer (chats-app--buffer)
+        (chats-app--send-download-video-request
+         :url url
+         :direct-path direct-path
+         :media-key media-key
+         :mimetype mimetype
+         :file-enc-sha256 file-enc-sha256
+         :file-sha256 file-sha256
+         :file-length file-length
+         :on-success (lambda (response)
+                       (message "Downloading video... done")
+                       (chats-app-chat--save-and-play-video
+                        :data-url (map-elt response 'Data)
+                        :mimetype mimetype
+                        :file-sha256 file-sha256))
+         :on-failure (lambda (error)
+                       (message "Failed to download video: %s"
+                                (or (map-elt error 'message) "unknown"))))))))
+
+(cl-defun chats-app-chat--save-and-play-video (&key data-url mimetype file-sha256)
+  "Save video to temporary file and open with external player.
+DATA-URL is the base64-encoded data URL from the backend.
+MIMETYPE is the video MIME type.
+FILE-SHA256 is used to create a unique filename."
+  (unless data-url
+    (error ":data-url is required"))
+  ;; Extract base64 data from data URL
+  (unless (string-match "data:[^;]+;base64,\\(.*\\)" data-url)
+    (error "Invalid data URL format"))
+  (let* ((base64-data (match-string 1 data-url))
+         (video-data (base64-decode-string base64-data))
+         ;; Use fileSHA256 (base64) as unique identifier, sanitize for filename
+         (file-id (if file-sha256
+                      (replace-regexp-in-string "[^a-zA-Z0-9]" "" file-sha256)
+                    (format "%d" (random 1000000))))
+         ;; Determine extension from mimetype
+         (extension (cond
+                     ((string-match "video/mp4" mimetype) ".mp4")
+                     ((string-match "video/quicktime" mimetype) ".mov")
+                     ((string-match "video/x-matroska" mimetype) ".mkv")
+                     ((string-match "video/webm" mimetype) ".webm")
+                     (t ".mp4")))
+         (temp-file (expand-file-name (concat "chatsapp-video-" file-id extension)
+                                      temporary-file-directory)))
+    ;; Write video data to temp file
+    (with-temp-file temp-file
+      (set-buffer-multibyte nil)
+      (insert video-data))
+    (chats-app-chat--open-video-externally temp-file)))
+
+(defun chats-app-chat--open-video-externally (file-path)
+  "Open video FILE-PATH with system default player."
+  (cond
+   ;; macOS
+   ((eq system-type 'darwin)
+    (start-process "open-video" nil "open" file-path))
+   ;; Linux
+   ((eq system-type 'gnu/linux)
+    (start-process "open-video" nil "xdg-open" file-path))
+   ;; Windows
+   ((memq system-type '(windows-nt ms-dos))
+    (start-process "open-video" nil "cmd" "/c" "start" "" file-path))
+   ;; Fallback
+   (t
+    (browse-url-of-file file-path))))
 
 (defun chats-app-chat-view-image-at-point ()
   "View the full image at point in a *ChatsApp photo* buffer."
