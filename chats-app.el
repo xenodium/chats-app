@@ -764,7 +764,9 @@ MESSAGE is displayed if present."
 ON-ENTERED is a function to call when the cursor enters the text.
 FACE when non-nil applies the specified face to the text."
   (add-text-properties 0 (length text)
-                       `(keymap ,(chats-app--make-action-keymap action))
+                       `(keymap ,(chats-app--make-action-keymap action)
+                         mouse-face highlight
+                         pointer hand)
                        text)
   (when on-entered
     (add-text-properties 0 (length text)
