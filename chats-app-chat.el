@@ -514,10 +514,7 @@ MESSAGES is a list of already-parsed internal message alists."
   (let ((inhibit-read-only t))
     (erase-buffer)
     (if (null messages)
-        (let ((start (point)))
-          (insert (propertize "\n[no chat history found]\n\n"
-                              'face 'font-lock-comment-face))
-          (put-text-property start (point) 'read-only t))
+        (insert "\n")
       (chats-app-chat--render-messages messages)
       (let ((start (point)))
         (insert "\n\n")
