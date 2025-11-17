@@ -803,6 +803,7 @@ FACE when non-nil applies the specified face to the text."
 (defun chats-app--update-header-line ()
   "Update the header line for the main chats app buffer."
   (let ((bindings `((:command chats-app-new-chat :description "new chat")
+                    (:command chats-app-new-chat-new-number :description "new number")
                     (:command chats-app-reload :description "refresh")
                     (:command chats-app-quit :description "quit"))))
     (setq header-line-format
