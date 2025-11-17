@@ -994,6 +994,7 @@ With prefix argument, prompt for a phone number to chat with directly."
                  chats-index)))
           (let ((inhibit-read-only t))
             (erase-buffer)
+            (insert "\n")
             (insert (mapconcat #'identity chat-lines "\n")))))
        ;; Otherwise show status message
        (message
