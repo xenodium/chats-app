@@ -417,27 +417,6 @@ Messages with reactions will have a :reactions field."
          :on-finished (lambda ()
                         (message "Refreshed")))))))
 
-(defun chats-app-chat-new-message ()
-  "Send a new message in the current chat."
-  (interactive)
-  (unless chats-app-chat--chat
-    (error "No chat information available"))
-  (let ((chat-jid (or (map-elt chats-app-chat--chat :chat-jid)
-                      (error "No chat JID available")))
-        (contact-name (map-elt chats-app-chat--chat :contact-name))
-        (chat-buffer (current-buffer)))
-    (let ((message (read-string (format "Message to %s: " (or contact-name chat-jid)))))
-      (when (and message (not (string-empty-p message)))
-        (with-current-buffer (chats-app--buffer)
-          (chats-app--send-chat-send-text-request
-           :phone chat-jid
-           :body message
-           :on-success (lambda (_response)
-                         (message "Message sent to %s" (or contact-name chat-jid))
-                         ;; Optionally refresh to show the sent message
-                         (with-current-buffer chat-buffer
-                           (chats-app-chat-refresh)))))))))
-
 (defun chats-app-chat-next-message ()
   "Jump to the next message (sender line)."
   (interactive)
