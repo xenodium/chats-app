@@ -277,6 +277,7 @@ it is required internally by the process.")
                                    :type 'error
                                    :message (chats-app--refresh-error :message "Couldn't initialize user")))))
 
+;; TODO: Reconsider naming and splitting into two separate requests "index" vs "jid".
 (cl-defun chats-app--send-chat-history-request (&key chat-jid contact-name on-finished)
   "Fetch chat history for CHAT-JID and store in state.
 CONTACT-NAME is the display name to use for the chat buffer.
@@ -318,13 +319,12 @@ For a specific chat JID, stores message array in :chats and opens chat buffer."
                                               (map-insert (or (map-elt (chats-app--state) :chats) '())
                                                           chat-jid response))
                                     ;; Parse protocol messages to internal format
-                                    (let* ((contacts (map-elt (chats-app--state) :contacts))
-                                           (messages (chats-app-chat--parse-messages response
-                                                                                     :chat-jid chat-jid
-                                                                                     :contact-name contact-name
-                                                                                     :contacts contacts))
-                                           ;; TODO: Consolidate buffer creation logic.
-                                           (chat-buffer (get-buffer (format "*ChatsApp: %s*" (or contact-name chat-jid)))))
+                                    (let ((messages (chats-app-chat--parse-messages response
+                                                                                    :chat-jid chat-jid
+                                                                                    :contact-name contact-name
+                                                                                    :contacts (map-elt (chats-app--state) :contacts)))
+                                          ;; TODO: Consolidate buffer creation logic.
+                                          (chat-buffer (get-buffer (format "*ChatsApp: %s*" (or contact-name chat-jid)))))
                                       (if chat-buffer
                                           ;; Buffer exists, just refresh it
                                           (progn
@@ -334,7 +334,13 @@ For a specific chat JID, stores message array in :chats and opens chat buffer."
                                         ;; Buffer doesn't exist, start new chat
                                         (chats-app-chat--start :chat-jid chat-jid
                                                                :messages messages
-                                                               :contact-name contact-name)))))
+                                                               :contact-name contact-name))))
+                                   ((and chat-jid (not (equal chat-jid "index")))
+                                    ;; Not an "index" request.
+                                    ;; Start new chat (no history).
+                                    (chats-app-chat--start :chat-jid chat-jid
+                                                           :messages nil ;; no history.
+                                                           :contact-name contact-name)))
                                   (when on-finished
                                     (funcall on-finished)))
                     :on-failure (lambda (error)
@@ -809,6 +815,42 @@ Error if not found."
       (acp-shutdown :client (map-elt (chats-app--state) :client)))
     (setq chats-app--state nil)
     (chats-app--initialize :home-buffer home-buffer)))
+
+(defun chats-app-new-chat ()
+  "Select a contact or group using completing-read and open the chat."
+  (interactive)
+  (unless (derived-mode-p 'chats-app-mode)
+    (user-error "Not in a chats buffer"))
+  (message "blah")
+  (let ((contacts (map-elt (chats-app--state) :contacts))
+        (groups (map-elt (chats-app--state) :groups)))
+    (unless (or contacts groups)
+      (user-error "No contacts or groups available"))
+    (if-let* ((available-chats
+               (append
+                ;; Add contacts
+                (mapcar (lambda (contact-entry)
+                          (let* ((jid (symbol-name (car contact-entry)))
+                                 (full-name (map-elt (cdr contact-entry) :full-name))
+                                 (push-name (map-elt (cdr contact-entry) :push-name))
+                                 (display-name (or (and full-name (not (string-empty-p full-name)) full-name)
+                                                   (and push-name (not (string-empty-p push-name)) push-name)
+                                                   jid)))
+                            (cons display-name jid)))
+                        contacts)
+                ;; Add groups
+                (mapcar (lambda (group-entry)
+                          (let* ((jid (symbol-name (car group-entry)))
+                                 (group-info (cdr group-entry))
+                                 (group-name (map-elt group-info :name))
+                                 (display-name (or (and group-name (not (string-empty-p group-name)) group-name)
+                                                   jid)))
+                            (cons display-name jid)))
+                        groups)))
+              (selected-jid (map-elt available-chats (completing-read "New chat with: " available-chats nil t))))
+        (chats-app--send-chat-history-request
+         :chat-jid selected-jid)
+      (user-error "No contact or group found"))))
 
 (defun chats-app--refresh ()
   "Refresh the display based on current status."

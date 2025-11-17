@@ -491,18 +491,15 @@ Messages with reactions will have a :reactions field."
 MESSAGES is a list of already-parsed internal message alists."
   (unless (derived-mode-p 'chats-app-chat-mode)
     (error "Not in a chat buffer"))
-
-  ;; Store messages
-  (let* ((max-width (chats-app-chat--calculate-max-sender-width messages)))
-    (map-put! chats-app-chat--chat :messages messages)
-    (map-put! chats-app-chat--chat :max-sender-width max-width))
-
-  ;; Render
+  (map-put! chats-app-chat--chat :messages messages)
+  (map-put! chats-app-chat--chat
+            :max-sender-width (chats-app-chat--calculate-max-sender-width messages))
   (let ((inhibit-read-only t))
     (erase-buffer)
     (if (null messages)
         (let ((start (point)))
-          (insert "No messages to display\n")
+          (insert (propertize "\n[no chat history found]\n\n"
+                              'face 'font-lock-comment-face))
           (put-text-property start (point) 'read-only t))
       (chats-app-chat--render-messages messages)
       (let ((start (point)))
@@ -629,8 +626,6 @@ CONTACT-NAME is the display name of the contact (or nil if not available).
 Displays messages in a two-column format: sender | message."
   (unless chat-jid
     (error ":chat-jid is required"))
-  (unless messages
-    (error ":messages is required"))
   ;; TODO: Consolidate buffer creation logic.
   (let ((chat-buffer (get-buffer-create (format "*ChatsApp: %s*" (or contact-name chat-jid)))))
     (with-current-buffer chat-buffer
