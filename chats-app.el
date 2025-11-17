@@ -59,9 +59,29 @@ If you need to start fresh delete the wuzapi database files."
   :type 'string
   :group 'chats-app)
 
+(defcustom chats-app-data-dir (expand-file-name "chats-app" user-emacs-directory)
+  "Directory for chats-app data storage.
+
+This directory will be used to store the wuzapi database and session files.
+If the directory does not exist, it will be created automatically."
+  :type 'directory
+  :group 'chats-app)
+
+(defun chats-app-data-dir ()
+  "Return the data directory, ensuring it exists.
+Creates the directory if it doesn't exist.
+Signals an error if the directory cannot be created."
+  (let ((dir (expand-file-name chats-app-data-dir)))
+    (unless (file-directory-p dir)
+      (condition-case err
+          (make-directory dir t)
+        (error
+         (error "Cannot create chats-app data directory %s: %s" dir (error-message-string err)))))
+    dir))
+
 (defcustom chats-app-wuzapi-command
-  '("wuzapi" "-mode=stdio")
-  "Command and parameters for the Anthropic Claude client.
+  `("wuzapi" "-mode=stdio" ,(format "-datadir=%s" (chats-app-data-dir)))
+  "Command and parameters for the wuzapi binary.
 
 The first element is the command name, and the rest are command parameters."
   :type '(repeat string)
@@ -615,7 +635,7 @@ MESSAGE should be a string like \"Failed to connect\"."
                                       ;; Pad image string with * so it can be centered in screen.
                                       (concat (make-string (round (car (image-size image))) ?*) "\n")
                                       'display image)
-                                     "\nScan to enable this WhatsApp client"))))
+                                     "\nScan from WhatsApp mobile to enable client"))))
 
 (cl-defun chats-app--message (&key text)
   "Display centered TEXT centered in current buffer.
