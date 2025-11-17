@@ -336,6 +336,38 @@ Messages with reactions will have a :reactions field."
 
 ;; UI functions
 
+(defun chats-app-chat--update-header-line ()
+  "Update the header line with chat name and key bindings.
+Shows different bindings depending on whether point is in input area."
+  (let ((bindings (if (chats-app-chat--in-input-area-p)
+                      `((:command chats-app-chat-send-input :description "to send message"))
+                    `((:command chats-app-chat-next-message :description "next")
+                      (:command chats-app-chat-previous-message :description "previous")
+                      (:command chats-app-chat-refresh :description "refresh")
+                      (:command chats-app-chat-quit :description "quit")))))
+    (setq header-line-format
+          (concat
+           " "
+           (when-let ((title (or (map-elt chats-app-chat--chat :contact-name)
+                                 (map-elt chats-app-chat--chat :chat-jid))))
+             (concat (propertize title 'face 'font-lock-doc-face) " "))
+           (mapconcat
+            #'identity
+            (seq-filter
+             #'identity
+             (mapcar
+              (lambda (binding)
+                (when-let* ((command (map-elt binding :command))
+                            (description (map-elt binding :description))
+                            (keys (where-is-internal command chats-app-chat-mode-map))
+                            (key (key-description (car keys))))
+                  (concat
+                   (propertize key 'face 'help-key-binding)
+                   " "
+                   description)))
+              bindings))
+            " ")))))
+
 (defun chats-app-chat--setup-prompt ()
   "Set up the read-only prompt at the end of the buffer."
   (goto-char (point-max))
@@ -367,7 +399,9 @@ Messages with reactions will have a :reactions field."
   "Major mode for displaying individual chat conversations.
 
 \\{chats-app-chat-mode-map}"
-  (setq-local inhibit-read-only nil))
+  (setq-local inhibit-read-only nil)
+  (add-hook 'post-command-hook #'chats-app-chat--update-header-line nil t)
+  (chats-app-chat--update-header-line))
 
 (defun chats-app-chat--in-input-area-p ()
   "Return non-nil if point is in the input area."
@@ -520,6 +554,7 @@ MESSAGES is a list of already-parsed internal message alists."
         (insert "\n\n")
         (put-text-property start (point) 'read-only t)))
     (chats-app-chat--setup-prompt)
+    (chats-app-chat--update-header-line)
     (goto-char (point-max))))
 
 (cl-defun chats-app-chat--render-message (&key sender-name timestamp content max-sender-width reactions message-id)

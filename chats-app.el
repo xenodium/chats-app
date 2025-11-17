@@ -721,6 +721,10 @@ MESSAGE is displayed if present."
   (unless (derived-mode-p 'chats-app-mode)
     (error "Not in a chats buffer"))
   (map-put! (chats-app--state) :status (chats-app--make-status :type type :message message))
+  ;; Header line should be present after loading.
+  (if type
+      (setq header-line-format nil)
+    (chats-app--update-header-line))
   (chats-app--refresh))
 
 (defun chats-app--timezone ()
@@ -788,16 +792,46 @@ FACE when non-nil applies the specified face to the text."
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "n") #'next-line)
     (define-key map (kbd "p") #'previous-line)
+    (define-key map (kbd "c") #'chats-app-new-chat)
+    (define-key map (kbd "C") #'chats-app-new-chat)
     (define-key map (kbd "q") #'chats-app-quit)
     (define-key map (kbd "g") #'chats-app-reload)
     map)
   "Keymap for `chats-app-mode'.")
+
+(defun chats-app--update-header-line ()
+  "Update the header line for the main chats app buffer."
+  (let ((bindings `((:command chats-app-new-chat :description "new chat")
+                    (:command chats-app-reload :description "refresh")
+                    (:command chats-app-quit :description "quit"))))
+    (setq header-line-format
+          (concat
+           " "
+           (propertize "Recent Chats and Groups" 'face 'font-lock-doc-face)
+           " "
+           (mapconcat
+            #'identity
+            (seq-filter
+             #'identity
+             (mapcar
+              (lambda (binding)
+                (when-let* ((command (map-elt binding :command))
+                            (description (map-elt binding :description))
+                            (keys (where-is-internal command chats-app-mode-map))
+                            (key (key-description (car keys))))
+                  (concat
+                   (propertize key 'face 'help-key-binding)
+                   " "
+                   description)))
+              bindings))
+            " ")))))
 
 (define-derived-mode chats-app-mode fundamental-mode "ChatsApp"
   "Major mode for chat interfaces.
 
 \\{chats-app-mode-map}"
   (setq buffer-read-only t)
+  (chats-app--update-header-line)
   (goto-char (point-max)))
 
 (defun chats-app-quit ()
