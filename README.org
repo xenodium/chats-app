@@ -1,6 +1,6 @@
 #+TITLE: Wasabi
 
-[[file:./icon/wasabi.png]]
+[[file:./icon/wasabi_x200.png]]
 
 * About
 
