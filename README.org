@@ -7,7 +7,7 @@
 
 Wasabi is a native Emacs interface for [[https://www.whatsapp.com/][WhatsApp]] messaging.
 
-Wasabi communicates with a [[https://github.com/asternic/wuzapi][wuzapi]] process over standard I/O using json-rpc.
+Powered by [[https://github.com/asternic/wuzapi][wuzapi]] and [[https://github.com/tulir/whatsmeow][whatsmeow]] over standard I/O (json-rpc).
 
 * Can I use it?
 
