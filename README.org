@@ -1,0 +1,13 @@
+#+TITLE: Wasabi
+
+[[file:./icon/wasabi.png]]
+
+* About
+
+Wasabi is a native Emacs interface for WhatsApp messaging.
+
+Wasabi communicates with a [[https://github.com/asternic/wuzapi][wuzapi]] process over standard I/O using json-rpc.
+
+* Can I use it?
+
+Not just yet. It's under development. Stay tunes.
