@@ -34,14 +34,16 @@
   (require 'cl-lib))
 (require 'map)
 (require 'parse-time)
+(require 'wasabi-icon)
 
-(declare-function wasabi--log "wasabi")
 (declare-function wasabi--add-action-to-text "wasabi")
 (declare-function wasabi--buffer "wasabi")
-(declare-function wasabi--send-chat-send-text-request "wasabi")
+(declare-function wasabi--face-height-pixels "wasabi")
+(declare-function wasabi--log "wasabi")
 (declare-function wasabi--send-chat-history-request "wasabi")
-(declare-function wasabi--send-download-video-request "wasabi")
+(declare-function wasabi--send-chat-send-text-request "wasabi")
 (declare-function wasabi--send-download-image-request "wasabi")
+(declare-function wasabi--send-download-video-request "wasabi")
 
 (cl-defun wasabi-chat--make-chat (&key chat-jid contact-name max-sender-width messages)
   "Create a chat alist with CHAT-JID, CONTACT-NAME, MAX-SENDER-WIDTH, and MESSAGES."
@@ -360,6 +362,8 @@ Shows different bindings depending on whether point is in input area."
     (setq header-line-format
           (concat
            " "
+           (wasabi-icon (wasabi--face-height-pixels 'font-lock-doc-face))
+           " "
            (when title
              (concat (propertize title 'face 'font-lock-doc-face) " "))
            (if in-input-area
@@ -369,7 +373,7 @@ Shows different bindings depending on whether point is in input area."
                     (wasabi-chat--get-binding-string #'wasabi-chat-previous-actionable)
                     "/"
                     (wasabi-chat--get-binding-string #'wasabi-chat-next-actionable)
-                    " navigation "
+                    " media "
                     (wasabi-chat--get-binding-string #'wasabi-chat-send-input)
                     " to send message")
                  ;; No actionables
@@ -382,15 +386,14 @@ Shows different bindings depending on whether point is in input area."
                 (concat
                  (wasabi-chat--get-binding-string #'wasabi-chat-previous-actionable)
                  "/"
-                 (wasabi-chat--get-binding-string #'wasabi-chat-next-actionable)
-                 "/"))
+                 (wasabi-chat--get-binding-string #'wasabi-chat-next-actionable)))
+              " media "
               (wasabi-chat--get-binding-string #'wasabi-chat-next-message)
               "/"
               (wasabi-chat--get-binding-string #'wasabi-chat-previous-message)
-              " navigation "
+              " message "
               (wasabi-chat--get-binding-string #'wasabi-chat-refresh)
-              " refresh "
-              (wasabi-chat--get-binding-string #'wasabi-chat-quit) " quit"))))))
+              " refresh"))))))
 
 (defun wasabi-chat--setup-prompt ()
   "Set up the read-only prompt at the end of the buffer."

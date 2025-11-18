@@ -35,6 +35,7 @@
 (require 'map)
 (require 'seq)
 (require 'wasabi-chat)
+(require 'wasabi-icon)
 
 (defcustom wasabi-user-token (concat
                               (or (user-login-name)
@@ -812,7 +813,9 @@ FACE when non-nil applies the specified face to the text."
     (setq header-line-format
           (concat
            " "
-           (propertize "Recent Chats and Groups" 'face 'font-lock-doc-face)
+           (wasabi-icon (wasabi--face-height-pixels 'font-lock-doc-face))
+           " "
+           (propertize "Recent Chats" 'face 'font-lock-doc-face)
            " "
            (mapconcat
             #'identity
@@ -1359,5 +1362,16 @@ Returns list of internal chat entry alists, filtered and sorted."
                 (FileSHA256 . ,file-sha256)
                 (FileLength . ,file-length)))))
 
+(defun wasabi--face-height-pixels (face)
+  "Get the approximate pixel height of FACE."
+  (let* ((height-attr (face-attribute face :height nil 'default))
+         (height-points (cond
+                         ((integerp height-attr) (/ height-attr 10.0))
+                         ((floatp height-attr) (* height-attr 12.0)) ; assume 12pt default
+                         (t 12.0)))) ; fallback to 12pt
+    ;; Convert points to pixels (assuming 96 DPI)
+    (round (* height-points 96.0 (/ 1.0 72.0)))))
+
 (provide 'wasabi)
+
 ;;; wasabi.el ends here
