@@ -11,3 +11,6 @@ Wasabi communicates with a [[https://github.com/asternic/wuzapi][wuzapi]] proces
 * Can I use it?
 
 Not just yet. It's under development. Stay tunes.
+
+* Attribution
+Wasabi icon based on [[https://www.vecteezy.com/members/jumpingxiii138417][Supakorn Jutasuwan]]'s [[https://www.vecteezy.com/vector-art/17673536-wasabi-character-design-wasabi-vector-on-white-background-wallpaper][wasabi wallpaper]].
