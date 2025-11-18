@@ -581,6 +581,9 @@ Calls ON-SUCCESS after contacts are fetched and parsed."
                                                 (map-elt p-info 'Chat)))
                                     ;; Must capture contacts before with-current-buffer.
                                     (contacts (map-elt (wasabi--state) :contacts)))
+                               ;; Trigger re-fetching index to show recent
+                               ;; chats and groups with latest order.
+                               (wasabi--send-chat-history-request :chat-jid "index")
                                (dolist (buffer (buffer-list))
                                  (with-current-buffer buffer
                                    (when-let ((message (and (derived-mode-p 'wasabi-chat-mode)
