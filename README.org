@@ -12,5 +12,13 @@ Wasabi communicates with a [[https://github.com/asternic/wuzapi][wuzapi]] proces
 
 Soon. At the moment, it's under development. Stay tuned.
 
+* Can I fund it?
+
+Yes, please. It's been a lot of work so far and there's plenty more to do.
+
+This project needs funding. Make the work sustainable by sponsoring.
+
+You can learn more about [[https://xenodium.com/want-a-whatsapp-emacs-client][my plans in this post]].
+
 * Attribution
 Wasabi icon based on [[https://www.vecteezy.com/members/jumpingxiii138417][Supakorn Jutasuwan]]'s [[https://www.vecteezy.com/vector-art/17673536-wasabi-character-design-wasabi-vector-on-white-background-wallpaper][wasabi wallpaper]].
