@@ -616,10 +616,7 @@ MESSAGES is a list of already-parsed internal message alists."
     (erase-buffer)
     (if (null messages)
         (insert "\n")
-      (wasabi-chat--render-messages messages)
-      (let ((start (point)))
-        (insert "\n\n")
-        (put-text-property start (point) 'read-only t)))
+      (wasabi-chat--render-messages messages))
     (wasabi-chat--setup-prompt)
     (wasabi-chat--update-header-line)
     (goto-char (point-max))))
@@ -674,7 +671,8 @@ MESSAGE-ID is used to tag the rendered message for later updates."
                                    (propertize reaction-sender
                                                'face 'font-lock-comment-face))))
                        reactions
-                       "\n"))))))
+                       "\n")))
+            "\n\n")))
 
 (defun wasabi-chat--render-messages (messages)
   "Render internal format MESSAGES to current buffer.
@@ -692,7 +690,7 @@ MESSAGES is a list of alists with :sender-name, :timestamp, :content."
               :message-id (map-elt msg :message-id)))
            messages)))
     (let ((start (point)))
-      (insert (mapconcat #'identity message-lines "\n\n"))
+      (insert "\n" (mapconcat #'identity message-lines))
       (put-text-property start (point) 'read-only t))))
 
 (defun wasabi-chat--append-message (message)
@@ -729,7 +727,6 @@ Updates :messages list and :max-sender-width in chat state."
                  :max-sender-width (map-elt wasabi-chat--chat :max-sender-width)
                  :reactions (map-elt message :reactions)
                  :message-id (map-elt message :message-id)))
-        (insert "\n\n")
         (put-text-property start (point) 'read-only t))
       (wasabi-chat--setup-prompt)
       ;; Restore saved input
