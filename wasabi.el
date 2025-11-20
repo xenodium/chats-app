@@ -151,9 +151,11 @@ it is required internally by the process.")
 (cl-defun wasabi--initialize (&key wasabi-buffer status-type status-message)
   "Initialize wasabi client and progress through startup sequence.
 
-Optional STATUS-TYPE and STATUS-MESSAGE params set the status before proceeding.
-Uses :status :type to track progress through initialization phases.
-For silent background refreshes, set :silent-refresh in state before calling."
+Requires the WASABI-BUFFER.
+
+Optional STATUS-TYPE and STATUS-MESSAGE are used for progressing through init.
+
+For silent progression, set :silent-refresh in state before calling."
   (unless wasabi-buffer
     (error ":wasabi-buffer is required"))
 
@@ -363,6 +365,7 @@ For silent background refreshes, set :silent-refresh in state before calling."
    message))
 
 (defun wasabi--header-graphical-p ()
+  "Return non-nil if header should show graphics."
   (and (display-graphic-p)
        (eq wasabi-header-style 'graphical)))
 
@@ -376,34 +379,10 @@ For silent background refreshes, set :silent-refresh in state before calling."
       (wasabi--make-icon-message "    Loading...")
     "Loading..."))
 
-(defun wasabi--send-connect-request ()
-  (unless (derived-mode-p 'wasabi-mode)
-    (error "Not in a chats buffer"))
-  (wasabi--set-status :type 'connecting
-                      :message (wasabi--make-loading-message))
-  (acp-send-request :client (map-elt (wasabi--state) :client)
-                    :request (wasabi--make-session-connect-request
-                              :token wasabi-user-token
-                              :immediate t
-                              :subscribe wasabi--event-subscriptions)
-                    :on-success (lambda (_response)
-                                  (wasabi--log "Initial connection successful (waiting for notification)")
-                                  (wasabi--set-status :type 'awaiting-connection
-                                                      :message (wasabi--make-loading-message)))
-                    :on-failure (lambda (error)
-                                  ;; Already connected, don't display as
-                                  ;; error since it can be ignored.
-                                  (if (and (map-elt error 'message)
-                                           (string-match-p "already connected" (map-elt error 'message)))
-                                      (wasabi--log "Connect request failed: already connected (ignored)")
-                                    (wasabi--log "Connect request failed: %s"
-                                                 (map-elt error 'message))
-                                    ;; Display real error
-                                    (wasabi--set-status
-                                     :type 'error
-                                     :message (wasabi--refresh-error :message "Failed to connect"))))))
-
 (cl-defun wasabi--send-disconnect-request (&key on-disconnected)
+  "Send disconnect request.
+
+Invokes ON-DISCONNECTED (lambda ()) on success."
   (unless (derived-mode-p 'wasabi-mode)
     (error "Not in a chats buffer"))
   (wasabi--log "Requesting to disconnected")
@@ -430,11 +409,14 @@ For silent background refreshes, set :silent-refresh in state before calling."
   "Fetch chat history for CHAT-JID and store in state.
 CONTACT-NAME is the display name to use for the chat buffer.
 
-When CHAT-JID is \"index\", stores normalized chat index as alist in :chats-index:
+When CHAT-JID is \"index\", stores normalized chat index
+as alist in :chats-index:
   ((\"chat-jid-1\" . chat-metadata-1)
    (\"chat-jid-2\" . chat-metadata-2) ...)
 
-For a specific chat JID, stores message array in :chats and opens chat buffer."
+For a specific chat JID, stores message array in :chats and opens chat buffer.
+
+Invoke ON-FINISHED on success."
   (unless (derived-mode-p 'wasabi-mode)
     (error "Not in a chats buffer"))
   (unless chat-jid
@@ -538,7 +520,15 @@ Calls ON-FAILURE with error if sending fails."
 (cl-defun wasabi--send-download-image-request (&key url direct-path media-key mimetype
                                                     file-enc-sha256 file-sha256 file-length
                                                     on-success on-failure)
-  "Download and decrypt an image from WhatsApp servers.
+  "Download URL with DIRECT-PATH and decrypt an image from WhatsApp servers.
+
+DIRECT-PATH - WhatsApp direct path to encrypted file
+MEDIA-KEY - Base64 encryption key for decrypting the image
+MIMETYPE - Image MIME type (e.g., \"image/jpeg\")
+FILE-ENC-SHA256 - SHA256 hash of encrypted file
+FILE-SHA256 - SHA256 hash of decrypted file
+FILE-LENGTH - File size in bytes
+
 Calls ON-SUCCESS with response containing decrypted image data.
 Calls ON-FAILURE with error if download fails."
   (unless (derived-mode-p 'wasabi-mode 'wasabi-chat-mode)
@@ -567,7 +557,15 @@ Calls ON-FAILURE with error if download fails."
 (cl-defun wasabi--send-download-video-request (&key url direct-path media-key mimetype
                                                     file-enc-sha256 file-sha256 file-length
                                                     on-success on-failure)
-  "Download and decrypt a video from WhatsApp servers.
+  "Download URL and decrypt a video from WhatsApp servers.
+
+DIRECT-PATH - WhatsApp direct path to encrypted file
+MEDIA-KEY - Base64 encryption key for decrypting the image
+MIMETYPE - Image MIME type (e.g., \"image/jpeg\")
+FILE-ENC-SHA256 - SHA256 hash of encrypted file
+FILE-SHA256 - SHA256 hash of decrypted file
+FILE-LENGTH - File size in bytes
+
 Calls ON-SUCCESS with response containing decrypted video data.
 Calls ON-FAILURE with error if download fails."
   (unless (derived-mode-p 'wasabi-mode 'wasabi-chat-mode)
@@ -726,7 +724,9 @@ Calls ON-FAILURE with error if download fails."
                                                      :status-message (wasabi--make-loading-message)))))))))
 
 (defun wasabi--log (format-string &rest args)
-  "Log a debug message to *Wasabi-Log* buffer."
+  "Log a debug message to *Wasabi-Log* buffer.
+
+FORMAT-STRING and ARGS like `message'."
   (with-current-buffer (get-buffer-create "*Wasabi-Log*")
     (goto-char (point-max))
     (insert (format-time-string "[%Y-%m-%d %H:%M:%S] "))
@@ -791,7 +791,7 @@ This function displayes TEXT only, wiping everything else."
         (insert cl "\n")))))
 
 (cl-defun wasabi--make-state (&key wasabi-buffer)
-  "Construct chat client state with home HOME-BUFFER.
+  "Construct chat client state with WASABI-BUFFER.
 
 State uses :status to track initialization progress (see `wasabi--make-status').
 The :connected flag tracks WhatsApp connection state (updated by notifications)."
@@ -845,12 +845,13 @@ TYPE can be one of:
   Data Loading: fetching-contacts, fetching-groups, fetching-chats
   Terminal: ready, error, disconnected
 
-MESSAGE is displayed if present. When TYPE is ready, the chat list is rendered."
+MESSAGE is displayed if present.  When TYPE is ready, the chat list is rendered."
   `((:type . ,type)
     (:message . ,message)))
 
 (cl-defun wasabi--set-status (&key type message silent)
-  "Set the current status and refresh the display.
+  "Set the current status TYPE and MESSAGE and refresh the display.
+
 Optional SILENT suppresses visual messaging during status change."
   (wasabi--log "Status change: %s \"%s\"" type message)
   (unless (derived-mode-p 'wasabi-mode)
@@ -976,6 +977,7 @@ FACE when non-nil applies the specified face to the text."
   (goto-char (point-max)))
 
 (defun wasabi-quit ()
+  "Quit `wasabi' and disconnect from WhatsApp."
   (interactive)
   (unless (derived-mode-p 'wasabi-mode)
     (error "Not in a chats buffer"))
@@ -1011,6 +1013,7 @@ Error if not found."
       (user-error "Wasabi buffer not found (start with M-x wasabi)")))
 
 (defun wasabi-reload ()
+  "Reload `wassabi' buffer."
   (interactive)
   (unless (derived-mode-p 'wasabi-mode)
     (user-error "Not in a chats buffer"))
@@ -1029,8 +1032,9 @@ Error if not found."
     (call-interactively #'wasabi-new-chat)))
 
 (defun wasabi-new-chat (new-number)
-  "Select a contact or group using completing-read and open the chat.
-With prefix argument, prompt for a phone number to chat with directly."
+  "Select a contact or group and open a new chat.
+
+With prefix argument NEW-NUMBER, prompt for a phone number."
   (interactive
    (list (when current-prefix-arg
            (read-string "Phone number (with country code, e.g., 447123456789): "))))
@@ -1275,13 +1279,17 @@ Returns list of internal chat entry alists, filtered and sorted."
       (:params . ,params))))
 
 (cl-defun wasabi--make-user-contacts-request (&key token)
-  "Instantiate a \"user.contacts\" request to get all contacts."
+  "Instantiate a \"user.contacts\" request to get all contacts.
+
+Requires user TOKEN."
   (unless token (error ":token is required"))
   `((:method . "user.contacts")
     (:params . ((token . ,token)))))
 
 (cl-defun wasabi--make-group-list-request (&key token)
-  "Instantiate a \"group.list\" request to get all groups."
+  "Instantiate a \"group.list\" request to get all groups.
+
+Requires user TOKEN."
   (unless token (error ":token is required"))
   `((:method . "group.list")
     (:params . ((token . ,token)))))
@@ -1347,9 +1355,20 @@ Returns list of internal chat entry alists, filtered and sorted."
                                                     hmac-key
                                                     expiration
                                                     history
-                                                    proxy-config
-                                                    s3-config)
-  "Instantiate an \"admin.users.add\" request."
+                                                    proxy-config)
+  "Instantiate an \"admin.users.add\" request.
+
+Required parameters:
+  ADMIN-TOKEN - Admin authentication token
+  NAME - User display name
+  TOKEN - User authentication token
+
+Optional parameters:
+  EVENTS - Event subscriptions (list or comma-separated string)
+  HISTORY - Number of historical messages to sync
+  HMAC-KEY - HMAC key for message authentication
+  EXPIRATION - Token expiration time
+  PROXY-CONFIG - Proxy configuration"
   (unless admin-token (error ":admin-token is required"))
   (unless name (error ":name is required"))
   (unless token (error ":token is required"))
@@ -1362,8 +1381,7 @@ Returns list of internal chat entry alists, filtered and sorted."
                                               (mapconcat #'identity events ",")
                                             events)))
                           (history . ,history)
-                          (proxyConfig . ,proxy-config)
-                          (s3Config . ,s3-config))
+                          (proxyConfig . ,proxy-config))
                         (when expiration
                           `((expiration . ,expiration)))
                         (when hmac-key
