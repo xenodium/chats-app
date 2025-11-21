@@ -1,8 +1,8 @@
 #+TITLE: Wasabi
 ✨[[https://github.com/sponsors/xenodium][sponsor this project]]✨
 
-#+CAPTION: わさび
 [[file:./icon/wasabi_x200.png]]
+わさび
 
 * About
 
