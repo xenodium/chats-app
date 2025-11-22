@@ -21,5 +21,30 @@ This project needs funding. Make the work sustainable by ✨[[https://github.com
 
 You can learn more about [[https://xenodium.com/want-a-whatsapp-emacs-client][plans in this post]].
 
+* Dependency
+
+You'll need [[https://github.com/asternic/wuzapi][wuzapi]].
+
+** Homebrew
+
+#+begin_src sh
+  brew install xenodium/wuzapi/wuzapi
+#+end_src
+
+* Install
+
+#+begin_src emacs-lisp
+  (use-package wasabi
+      :vc (:url "https://github.com/xenodium/wasabi"))
+#+end_src
+
+* Run
+
+Run with
+
+#+begin_src
+  M-x wasabi
+#+end_src
+
 * Attribution
 Wasabi icon based on [[https://www.vecteezy.com/members/jumpingxiii138417][Supakorn Jutasuwan]]'s [[https://www.vecteezy.com/vector-art/17673536-wasabi-character-design-wasabi-vector-on-white-background-wallpaper][wasabi wallpaper]].
