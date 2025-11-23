@@ -8,6 +8,10 @@ A native Emacs interface for [[https://www.whatsapp.com/][WhatsApp]] messaging.
 
 Powered by [[https://github.com/asternic/wuzapi][wuzapi]] and [[https://github.com/tulir/whatsmeow][whatsmeow]] over standard I/O (json-rpc).
 
+[[file:screenshots/chats.png]]
+
+[[file:screenshots/chat.png]]
+
 * Can I use it?
 
 Soon. At the moment, it's under development. Stay tuned.
