@@ -58,7 +58,7 @@ You can use something like:
 
 #+begin_src emacs-lisp
   (use-package wasabi
-      :vc (:url "https://github.com/xenodium/wasabi"))
+    :vc (:url "https://github.com/xenodium/wasabi"))
 #+end_src
 
 * Run
