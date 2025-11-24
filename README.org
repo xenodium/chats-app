@@ -12,6 +12,10 @@ Powered by [[https://github.com/asternic/wuzapi][wuzapi]] and [[https://github.c
 
 [[file:screenshots/chat.png]]
 
+* Early days
+
+It's early days for this project. While functional, there are rough edges and plenty of features to implement still.
+
 * Can I fund it?
 
 Yes, please. It's been a lot of work to get this far and there's plenty more to do.
