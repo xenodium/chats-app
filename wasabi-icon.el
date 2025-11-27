@@ -109,6 +109,15 @@
     </g>
 </svg>")
 
+(defun wasabi-icon--svg-file ()
+  "Return the path to the wasabi icon SVG file."
+  (if-let ((temp-file (expand-file-name "wasabi.svg" temporary-file-directory))
+           ((file-exists-p temp-file)))
+      temp-file
+    (with-temp-file temp-file
+      (insert wasabi-icon--svg))
+    temp-file))
+
 (defun wasabi-icon (&optional height)
   "Return a propertized string with wasabi icon for display in a buffer.
 HEIGHT specifies the desired height in pixels (defaults to 16)."
