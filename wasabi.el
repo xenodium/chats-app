@@ -703,7 +703,7 @@ Calls ON-FAILURE with error if download fails."
                                          (wasabi-chat--add-reaction
                                           :target-id (map-elt message :target-id)
                                           :emoji (map-elt message :emoji)
-                                          :sender (map-elt message :sender))
+                                          :sender (map-elt message :sender-name))
                                        (wasabi-chat--append-message message)))))))
                             ((equal (map-elt notification 'method) "HistorySync")
                              (wasabi--log "HistorySync received")

@@ -270,7 +270,7 @@ For reaction messages, also includes :is-reaction, :target-id, and :emoji."
         `((:is-reaction . t)
           (:target-id . ,target-id)
           (:emoji . ,emoji)
-          (:sender . ,sender-name)))
+          (:sender-name . ,sender-name)))
     ;; Regular message
     (let* ((is-from-me (map-elt p-info 'IsFromMe))
            (sender-name (if is-from-me
